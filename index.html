@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trainer Sessions</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#14171a;--mute:#6b7280;--acc:#e8590c;--line:#e5e7eb}
+@media(prefers-color-scheme:dark){:root{--bg:#111315;--card:#1b1e21;--ink:#f1f3f5;--mute:#9aa1aa;--line:#2b2f33}}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--ink);padding:16px;max-width:760px;margin:auto}
+h1{font-size:1.4rem}h2{font-size:1.05rem;margin:0 0 8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+input,select,textarea,button{font:inherit;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%;margin-bottom:8px}
+button{background:var(--acc);color:#fff;border:0;cursor:pointer;font-weight:600}
+button.ghost{background:transparent;color:var(--mute);border:1px solid var(--line);width:auto;padding:4px 10px;margin:0}
+.row{display:flex;gap:8px}.row>*{flex:1}
+.item{border-top:1px solid var(--line);padding:10px 0;font-size:.92rem}
+.mute{color:var(--mute);font-size:.85rem}
+</style>
+</head>
+<body>
+<h1>🏋️ Trainer Sessions</h1>
+
+<div class="card">
+  <h2>Add client</h2>
+  <div class="row"><input id="cname" placeholder="Client name"><input id="cgoal" placeholder="Goal (e.g. fat loss)"></div>
+  <button onclick="addClient()">Add client</button>
+</div>
+
+<div class="card">
+  <h2>Book session</h2>
+  <select id="sclient"></select>
+  <div class="row"><input id="sdate" type="datetime-local"><input id="sfocus" placeholder="Focus (legs, push...)"></div>
+  <button onclick="addSession()">Book</button>
+</div>
+
+<div class="card">
+  <h2>Sessions</h2>
+  <div id="sessions"></div>
+</div>
+
+<div class="card">
+  <h2>Clients</h2>
+  <div id="clients"></div>
+</div>
+
+<script>
+const K='trainer-app-v1';
+let db={clients:[],sessions:[]};
+try{const s=localStorage.getItem(K);if(s)db=JSON.parse(s)}catch(e){}
+const save=()=>{try{localStorage.setItem(K,JSON.stringify(db))}catch(e){}render()};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const id=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+
+function addClient(){
+  const n=cname.value.trim();if(!n)return;
+  db.clients.push({id:id(),name:n,goal:cgoal.value.trim()});
+  cname.value=cgoal.value='';save();
+}
+function addSession(){
+  if(!sclient.value||!sdate.value)return;
+  db.sessions.push({id:id(),client:sclient.value,date:sdate.value,focus:sfocus.value.trim(),done:false,notes:'',log:[]});
+  sfocus.value='';save();
+}
+function addSet(sid){
+  const ex=prompt('Exercise?');if(!ex)return;
+  const set=prompt('Sets x reps @ kg (e.g. 4x8 @ 60)')||'';
+  db.sessions.find(s=>s.id===sid).log.push(ex+' - '+set);save();
+}
+function toggle(sid){const s=db.sessions.find(s=>s.id===sid);s.done=!s.done;save()}
+function note(sid){const s=db.sessions.find(s=>s.id===sid);const n=prompt('Notes',s.notes);if(n!==null){s.notes=n;save()}}
+function delSession(sid){db.sessions=db.sessions.filter(s=>s.id!==sid);save()}
+function delClient(cid){
+  db.clients=db.clients.filter(c=>c.id!==cid);
+  db.sessions=db.sessions.filter(s=>s.client!==cid);save();
+}
+function render(){
+  sclient.innerHTML=db.clients.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')||'<option value="">Add a client first</option>';
+  const name=cid=>(db.clients.find(c=>c.id===cid)||{name:'?'}).name;
+  const sorted=[...db.sessions].sort((a,b)=>a.date.localeCompare(b.date));
+  sessions.innerHTML=sorted.map(s=>`<div class="item">
+    <b>${esc(name(s.client))}</b> · ${esc(s.date.replace('T',' '))} ${s.focus?'· '+esc(s.focus):''}
+    ${s.done?'✅':''}
+    ${s.log.map(l=>`<div class="mute">• ${esc(l)}</div>`).join('')}
+    ${s.notes?`<div class="mute">📝 ${esc(s.notes)}</div>`:''}
+    <div class="row" style="margin-top:6px">
+      <button class="ghost" onclick="toggle('${s.id}')">${s.done?'Reopen':'Complete'}</button>
+      <button class="ghost" onclick="addSet('${s.id}')">+ Exercise</button>
+      <button class="ghost" onclick="note('${s.id}')">Notes</button>
+      <button class="ghost" onclick="delSession('${s.id}')">Delete</button>
+    </div></div>`).join('')||'<div class="mute">No sessions yet.</div>';
+  clients.innerHTML=db.clients.map(c=>{
+    const n=db.sessions.filter(s=>s.client===c.id&&s.done).length;
+    return `<div class="item"><b>${esc(c.name)}</b> <span class="mute">${esc(c.goal)} · ${n} sessions done</span>
+    <button class="ghost" style="float:right" onclick="delClient('${c.id}')">Remove</button></div>`}).join('')||'<div class="mute">No clients yet.</div>';
+}
+render();
+</script>
+</body>
+</html>
